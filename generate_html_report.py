@@ -63,7 +63,8 @@ def generate_report():
             'ptk_count': ptk_count, 'ptk_profit_rate': ptk_wr, 'ptk_ratio': ptk_ratio,
             'd_count': d_count, 'd_profit_rate': d_wr, 'd_ratio': d_ratio,
             'k_count': k_count, 'k_profit_rate': k_wr, 'k_ratio': k_ratio,
-            'marker': " | ".join(marker)
+            'marker': " | ".join(marker),
+            'currency_counts': group['currency'].value_counts().to_dict()
         })
 
     # Process player data
@@ -99,7 +100,8 @@ def generate_report():
             'n_count': n_count, 'n_profit_rate': n_wr, 'n_ratio': n_ratio,
             'ptk_count': ptk_count, 'ptk_profit_rate': ptk_wr, 'ptk_ratio': ptk_ratio,
             'd_count': d_count, 'd_profit_rate': d_wr, 'd_ratio': d_ratio,
-            'k_count': k_count, 'k_profit_rate': k_wr, 'k_ratio': k_ratio
+            'k_count': k_count, 'k_profit_rate': k_wr, 'k_ratio': k_ratio,
+            'currency_counts': group['currency'].value_counts().to_dict()
         })
 
     html_template = f"""<!DOCTYPE html>
@@ -395,6 +397,12 @@ def generate_report():
                                     <tr><td>K</td><td>${{d.k_count}}</td><td>${{formatPercent(d.k_ratio)}}</td></tr>
                                 </table>
                             </div>
+                            <div class="stats-box">
+                                <table>
+                                    <tr><th>幣種</th><th>局數</th></tr>
+                                    ${{Object.entries(d.currency_counts || {{}}).map(([c, count]) => `<tr><td>${{c}}</td><td>${{count}}</td></tr>`).join('')}}
+                                </table>
+                            </div>
                         </div>
                     </td>
                 `;
@@ -446,6 +454,12 @@ def generate_report():
                                     <tr><td>K</td><td>${{d.k_count}}</td><td>${{formatPercent(d.k_ratio)}}</td></tr>
                                 </table>
                                 <div class="total-profit-display">該玩家總營利率: <span class="${{getColorClass(d.total_profit_rate)}}">${{formatPercent(d.total_profit_rate)}}</span></div>
+                            </div>
+                            <div class="stats-box">
+                                <table>
+                                    <tr><th>幣種</th><th>局數</th></tr>
+                                    ${{Object.entries(d.currency_counts || {{}}).map(([c, count]) => `<tr><td>${{c}}</td><td>${{count}}</td></tr>`).join('')}}
+                                </table>
                             </div>
                         </div>
                     </td>
