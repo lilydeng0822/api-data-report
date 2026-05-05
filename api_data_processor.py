@@ -12,22 +12,64 @@ with urllib.request.urlopen(req) as response:
 rows = data.get('rows', [])
 df = pd.DataFrame(rows)
 
-df['profit'] = pd.to_numeric(df['profit'].str.replace(',', ''), errors='coerce').fillna(0)
-df['allBet'] = pd.to_numeric(df['allBet'].str.replace(',', ''), errors='coerce').fillna(0)
+df['profit'] = pd.to_numeric(df['profit'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+df['allBet'] = pd.to_numeric(df['allBet'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
 df['roomType_upper'] = df['roomType'].str.upper()
 
-grouped = df[df['roomType_upper'].isin(['K', 'PTK'])].groupby(['gameName', 'roomType_upper']).agg(
-    total_bet=('allBet', 'sum'),
-    total_profit=('profit', 'sum'),
-    game_count=('allBet', 'count')
-).reset_index()
+exchange_rates = {
+    "CNY": 1.0, "USD": 7.0, "TWD": 0.2, "MYR": 2.0, "VND": 0.0003,
+    "THB": 0.2, "IDR": 0.0005, "JPY": 0.05, "AUD": 4.9, "EUR": 8.0,
+    "GBP": 10.0, "INR": 0.1, "KRW": 0.006, "MMK": 0.005, "PHP": 0.2,
+    "SGD": 4.8, "USDT": 6.0, "BRL": 1.4, "TRY": 2.0, "VNDK": 0.3,
+    "RUB": 0.08, "IRR": 0.0001, "MMKK": 5.0, "NGN": 0.01, "IDRK": 0.5
+}
+df['exchangeRate'] = df['currency'].map(exchange_rates).fillna(1.0)
+df['profit'] = df['profit'] * df['exchangeRate']
+df['allBet'] = df['allBet'] * df['exchangeRate']
 
-grouped['win_rate_val'] = grouped.apply(lambda row: row['total_profit'] / row['total_bet'] if row['total_bet'] > 0 else 0, axis=1)
-grouped['win_rate'] = grouped['win_rate_val'].apply(lambda x: f"{x:.2%}")
-grouped['marker'] = grouped['win_rate_val'].apply(lambda x: '⭐正贏利' if x > 0 else '')
+results = []
+for game, group in df.groupby('gameName'):
+    total_bet = group['allBet'].sum()
+    total_profit = group['profit'].sum()
+    total_count = group['allBet'].count()
+    total_win_rate = total_profit / total_bet if total_bet > 0 else 0
+    
+    def get_room_stats(rtype):
+        r_group = group[group['roomType_upper'] == rtype]
+        bet = r_group['allBet'].sum()
+        profit = r_group['profit'].sum()
+        count = r_group['allBet'].count()
+        wr = profit / bet if bet > 0 else 0
+        return count, wr
+
+    n_count, n_wr = get_room_stats('N')
+    ptk_count, ptk_wr = get_room_stats('PTK')
+    d_count, d_wr = get_room_stats('D')
+    k_count, k_wr = get_room_stats('K')
+    
+    marker = []
+    if ptk_wr > 0: marker.append("PTK營利率大於0")
+    if k_wr > 0: marker.append("K營利率大於0")
+    
+    results.append({
+        '遊戲': game,
+        '總局數': total_count,
+        '總盈利率': f"{total_win_rate:.2%}",
+        'N局數': n_count,
+        'N盈利率': f"{n_wr:.2%}",
+        'ptk局數': ptk_count,
+        'ptk盈利率': f"{ptk_wr:.2%}",
+        'D局數': d_count,
+        'D盈利率': f"{d_wr:.2%}",
+        'K局數': k_count,
+        'K盈利率': f"{k_wr:.2%}",
+        '特別標註': " | ".join(marker)
+    })
+
+grouped_translated = pd.DataFrame(results)
 
 print('--- Grouped Data ---')
-print(grouped.head(10))
+print(grouped_translated.head(10))
 
 warnings = []
 filtered_df = df[df['roomType_upper'].isin(['K', 'PTK'])]
@@ -72,40 +114,53 @@ translation_dict = {
 }
 df_translated = df.rename(columns=translation_dict)
 
-# Define translations for Sheet 2
-grouped_translation = {
-    'gameName': '遊戲名稱',
-    'roomType_upper': '房間類型',
-    'game_count': '局數',
-    'total_bet': '總押注金額',
-    'total_profit': '總盈虧金額',
-    'win_rate': '勝率(利潤率)',
-    'marker': '正贏利標記'
-}
-grouped_translated = grouped[['gameName', 'roomType_upper', 'game_count', 'total_bet', 'total_profit', 'win_rate', 'marker']].rename(columns=grouped_translation)
+# Sheet 2 data is already prepared in grouped_translated
 
 # Prepare dataframe for Sheet 3
-all_players_grouped = df.groupby('account').agg(
-    total_bet=('allBet', 'sum'),
-    total_profit=('profit', 'sum'),
-    game_count=('allBet', 'count')
-).reset_index()
+player_results = []
+for account, group in df.groupby('account'):
+    total_bet = group['allBet'].sum()
+    total_profit = group['profit'].sum()
+    total_count = group['allBet'].count()
+    win_rate_val = total_profit / total_bet if total_bet > 0 else 0
+    warning = '⚠大於-2.5%' if win_rate_val > -0.025 else ''
+    
+    def get_room_stats(rtype):
+        r_group = group[group['roomType_upper'] == rtype]
+        bet = r_group['allBet'].sum()
+        profit = r_group['profit'].sum()
+        count = r_group['allBet'].count()
+        wr = profit / bet if bet > 0 else 0
+        ratio = count / total_count if total_count > 0 else 0
+        return count, wr, ratio
 
-all_players_grouped['win_rate_val'] = all_players_grouped.apply(
-    lambda row: row['total_profit'] / row['total_bet'] if row['total_bet'] > 0 else 0, axis=1
-)
-all_players_grouped['win_rate'] = all_players_grouped['win_rate_val'].apply(lambda x: f"{x:.2%}")
-all_players_grouped['warning'] = all_players_grouped['win_rate_val'].apply(lambda x: '⚠大於5%' if x > 0.05 else '')
+    n_count, n_wr, n_ratio = get_room_stats('N')
+    ptk_count, ptk_wr, ptk_ratio = get_room_stats('PTK')
+    d_count, d_wr, d_ratio = get_room_stats('D')
+    k_count, k_wr, k_ratio = get_room_stats('K')
+    
+    player_results.append({
+        '玩家帳號': account,
+        '局數': total_count,
+        '總押注金額': total_bet,
+        '總盈虧金額': total_profit,
+        '勝率(營利率)': f"{win_rate_val:.2%}",
+        'RTP大於97.5': warning,
+        'N局數': n_count,
+        'N營利率': f"{n_wr:.2%}",
+        'N局數比例': f"{n_ratio:.2%}",
+        'PTK局數': ptk_count,
+        'PTK營利率': f"{ptk_wr:.2%}",
+        'PTK局數比例': f"{ptk_ratio:.2%}",
+        'D局數': d_count,
+        'D營利率': f"{d_wr:.2%}",
+        'D局數比例': f"{d_ratio:.2%}",
+        'K局數': k_count,
+        'K營利率': f"{k_wr:.2%}",
+        'K局數比例': f"{k_ratio:.2%}"
+    })
 
-player_translation = {
-    'account': '玩家帳號',
-    'game_count': '局數',
-    'total_bet': '總押注金額',
-    'total_profit': '總盈虧金額',
-    'win_rate': '勝率(營利率)',
-    'warning': '超過5%標記'
-}
-player_sheet_df = all_players_grouped[['account', 'game_count', 'total_bet', 'total_profit', 'win_rate', 'warning']].rename(columns=player_translation)
+player_sheet_df = pd.DataFrame(player_results)
 
 # Output to Excel
 excel_file = 'api_data_report.xlsx'
