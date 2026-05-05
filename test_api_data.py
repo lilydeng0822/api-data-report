@@ -91,8 +91,8 @@ class TestAPIData:
         )
         allure.attach(details, name="遊戲詳細數據", attachment_type=allure.attachment_type.TEXT)
         
-        # 斷言：營利率必須 > -2.5% (-0.025)
-        assert win_rate > -0.025, f"異常！遊戲 {game_name} 的營利率 {win_rate:.2%} 小於等於 -2.5% 門檻！"
+        # 斷言：營利率大於 -2.5% 為失敗
+        assert win_rate <= -0.025, f"異常！遊戲 {game_name} 的營利率 {win_rate:.2%} 大於 -2.5% 門檻！"
 
     @allure.story("3. 單個玩家總營利率檢測")
     @allure.title("玩家 {player[account]} 營利率檢查")
@@ -116,5 +116,5 @@ class TestAPIData:
         )
         allure.attach(details, name="玩家詳細數據", attachment_type=allure.attachment_type.TEXT)
         
-        # 斷言：營利率必須 > -2.5% (-0.025)
-        assert win_rate > -0.025, f"異常！玩家 {account} 的營利率 {win_rate:.2%} 小於等於 -2.5% 門檻！"
+        # 斷言：營利率大於 -2.5% 為失敗
+        assert win_rate <= -0.025, f"異常！玩家 {account} 的營利率 {win_rate:.2%} 大於 -2.5% 門檻！"
